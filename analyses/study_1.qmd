@@ -1,6 +1,6 @@
 ---
 title: 'Tainted Trends'
-subtitle: '  '
+subtitle: 'Pre-Registration'
 author:
 - name: Hauke Roggenkamp
   email: Hauke.Roggenkamp@unisg.ch
@@ -34,10 +34,25 @@ format:
     embed-resources: true
     theme: cosmo
 toc: true
-bibliography: literature/biblio.bib
+fig-cap-location: top
+bibliography: ../literature/biblio.bib
 ---
 
 ---
+
+This document briefly describes the motivation, the design, the processing of the eventual data as well as the analyses of an experiment we plan to run.
+
+# Motivation
+
+In today's hyperconnected world, brands are co-created by a variety of stakeholders [@SwaminathanEtAl_2020]. We study exogenously inflicted brand dilution caused by stakeholders who _hijack_ brand experiences in social media [@GrierEtAl_2010]. Specifically, we investigate the contaminating effect [@WhitlerEtAl_2021] of stakeholders who append their (from a brand's perspective) unfavorable content to a branded hashtag.
+
+
+# Design
+
+We expose participants to a realistic social media feed that covers the _National Fried Chicken Day_. We ask participants to scroll through the feed to learn more about that event and tell them that it is associated to the brand _Kentucky Fried Chicken (KFC)_. Importantly, we exogeneously manipulate the degree to which a feed is hijacked by randomly drawing a set of tweets that are favorable and unfavorable (from a brand's perspective). An unfavorable tweet may consist of animal rights, labor rights or pro-vegan content that is appended to the hashtag _#NationalFriedChickenDay_. Favorable content also uses that hashtag but appends content showing recipes, family gatherings or actual meals. 
+
+Subsequently, we ask participants to describe their experience, thoughts and feelings towards the focal brand (KFC) in an open text field^["_Please describe as detailed as you can: What were the first thoughts and feelings towards the brand KFC that came to your mind when you were scrolling through the feed?_"] and elicit an established brand trust measure using four seven-point semantic-differentials to measure how much a participant believes the brand is honest and not manipulative [@KirmaniEtAl2017]^[dishonest / honest, insincere / sincere, manipulative / not manipulative, not trustworthy / trustworthy.]. We also ask participants whether they like KFC on a single seven-point Likert scale. Furthermore, we elicit covariates covering the participants' fast food and meat consumption as well as their age, gender and education.
+
 
 # Install Packages
 
@@ -45,23 +60,533 @@ We install the following packages using the `groundhog` package manager to incre
 
 ```{r install_packages}
 #| output: false
+#| echo: true
 
 if (!requireNamespace("groundhog", quietly = TRUE)) {
     install.packages("groundhog")
     library("groundhog")
 }
 
-pkgs <- c("magrittr", "data.table", "stringr", "lubridate", "knitr", 
-          "sandwich", "lmtest",
-          "sjPlot", "stargazer")
+pkgs <- c("magrittr", "data.table", "knitr", "stringr", "jsonlite", 
+          "ggplot2", "patchwork",
+          "stargazer")
 
 groundhog::groundhog.library(pkg = pkgs,
                              date = "2023-09-25")
+
+rm(pkgs)
 ```
 
-# Read Data
+# Preprocessing
+
+## Read Data
 
 ```{r read_data}
-# data <- data.table::fread(file = "../data/processed/full.csv")
-data <- readRDS(file="data/testing/full.Rda")
+raw <- data.table::fread(file = "../data/testing/all_apps_wide-2023-11-09.csv")
 ```
+
+## Select Data
+
+```{r select_data}
+cols <- str_detect(string = names(raw), 
+                   pattern = "participant.label|participant.code|liked_item|reply_to_item|favorable|sequence|viewport")
+
+data <- raw[, ..cols]
+```
+
+## Rename Data
+
+```{r rename_data}
+names(data) %>%
+  str_replace_all(pattern = ".*player\\.", replacement = "") %>%
+  str_replace_all(pattern = "\\.", replacement = "_") %>%
+  str_to_lower() %>%
+  setnames(x = data)
+```
+
+
+## Number or Fraction of Unfavorable Tweets
+
+```{r}
+#| warning: false
+feed_composition <- data[, 
+                         .(favorable_count = favorable_feed %>%
+                             strsplit(split = ',') %>%
+                             unlist() %>% 
+                             as.numeric() %>% 
+                             sum(na.rm = TRUE),
+                           total_count = favorable_feed %>%
+                             strsplit(split = ',') %>%
+                             unlist() %>% 
+                             length()),
+                         by = participant_code]
+
+feed_composition[, fraction_unfavorable := ((1 - favorable_count / total_count)*100)]
+```
+
+## Treatment Info by Tweet
+
+```{r}
+#| warning: false
+condition <- data[, 
+                  .(favorable = favorable_feed %>%
+                      strsplit(split = ',') %>%
+                      unlist() %>% 
+                      str_replace(pattern = ' ',
+                                  replacement = '') %>%
+                      as.character() %>%
+                      as.numeric() %>%
+                      as.logical()),
+                  by = participant_code]
+
+condition[, displayed_sequence := 1:.N, by = participant_code]
+```
+
+
+## Item Sequence
+
+
+```{r}
+#| warning: false
+sequence_list <- lapply(seq(nrow(data)), function(i) {
+  participant_code <- data[i, participant_code]
+  sequence <- data[i, sequence]
+  tmp <- data.table(participant_code = rep(participant_code, 
+                                           length(unlist(strsplit(sequence, ", ")))), 
+                    tweet = unlist(base::strsplit(x = sequence, 
+                                                  split = ", ")) %>%
+                      as.integer())
+  tmp[, displayed_sequence := 1:.N]
+  return(tmp)
+})
+
+# Combine the list of data.tables into one data.table
+display <- rbindlist(sequence_list)
+
+rm(list = c('sequence_list', 'tmp'))
+```
+
+
+## Scroll Sequence
+
+Because people may scroll back and forth, this sequence may be longer than the number of tweets, simply because some tweets may occur several times in that scroll sequence.
+
+```{r}
+#| warning: false
+scroll <- data[, 
+               .(participant_code,
+                 tweet = scroll_sequence %>%
+                   strsplit(split = '-') %>%
+                   unlist() %>%
+                   str_replace_all(pattern = 'i', 
+                                   replacement = '')),
+               by = participant_code][!(tweet == shift(tweet, type = "lead")),
+                                      by = participant_code][, 
+                                                             scroll_sequence := 1:.N,
+                                                             by = participant_code]
+
+
+
+data[1, .(participant_code,
+        item = scroll_sequence %>%
+          strsplit(split = '-') %>%
+          unlist() %>%
+          str_replace_all(pattern = 'i', replacement = ''))][!(item == shift(item, type = "lead")), ][, scroll_sequence := 1:.N]
+```
+
+## Viewport
+
+```{r transform_json_output}
+viewport <- data[,
+                 viewport_data %>%
+                     str_replace_all(pattern = '""', 
+                                     replacement = '"') %>%
+                     fromJSON,
+                 by = participant_code][!is.na(doc_id)]
+
+# sum of durations by tweet (in case someone scrolled back and forth)
+viewport <- viewport[, 
+                     .(seconds_in_viewport = sum(duration, 
+                                                 na.rm = TRUE)),
+                     by = c('participant_code', 'doc_id')]
+
+
+# rename
+setnames(x = viewport,
+         old = 'doc_id',
+         new = 'tweet')
+```
+
+## Reactions
+
+```{r}
+# make sure each and every reply column is a string
+sdcols <- names(data) %>%
+  str_subset(pattern = "reply_to_item")
+data[, 
+     paste0(sdcols) := lapply(.SD, as.character), 
+     .SDcols = sdcols]
+
+# melt data
+reactions <- data.table::melt(data = data,
+                              id.vars = c('participant_code', 'participant_label'),
+                              measure.vars = patterns('liked_item_', 'reply_to_item'),
+                              variable.name = 'tweet',
+                              value.name = c('likes', 'replies'))
+
+# make tweet identifier numeric for compatibility reasons.
+reactions[, tweet := as.numeric(as.character(tweet))]
+```
+
+## Self-Reports
+
+```{r}
+# select
+cols <- str_detect(string = names(raw), 
+                   pattern = "participant\\.code|trust|usability|KFC|meatless|\\.age|gender|completed|perception|food|frequency|education|genAI")
+
+self_reports <- raw[, ..cols]
+
+# rename
+names(self_reports) %>%
+  str_replace_all(pattern = ".*player\\.", replacement = "") %>%
+  str_replace_all(pattern = "\\.", replacement = "_") %>%
+  str_to_lower() %>%
+  setnames(x = self_reports)
+
+```
+
+```{r calc_indices}
+
+# calculate simple indices
+
+self_reports[, trust := (trust_1 + trust_2 + trust_3 + trust_4)/4]
+self_reports[, usability := (usability_1 + usability_2 + usability_3)/3]
+
+# transform gender variable
+self_reports[, female := 1]
+self_reports[gender != 1, female := 0]
+
+# ... and meatless
+self_reports[, vegetarian := 0]
+self_reports[meatless == "Yes", vegetarian := 1]
+```
+
+
+## Merge
+
+Note that the last item displayed never leaves the viewport which is why we do not measure the duration it is displayed.
+
+```{r}
+# merge 1: displayed tweets with condition info
+long <- display[condition, on = .(participant_code, displayed_sequence)]
+
+# merge 2: long with viewport data (full join)
+long <- rbind(
+  fill = TRUE,
+  long[viewport, on = .(participant_code, tweet)],  # join
+  long[!viewport, on = .(participant_code, tweet)]  # anti-join
+)
+
+# merge 2: long with reactions (left join)
+long <- long[reactions, on = .(participant_code, tweet)]
+
+# merge 3: long with reactions (left join)
+long <- long[feed_composition, on = .(participant_code)]
+
+# merge 4: long with self-reports
+long <- long[self_reports, on = .(participant_code)]
+
+
+# remove items that haven't been displayed
+tweets <- long[!is.na(displayed_sequence)]
+
+# order
+setorder(x = tweets, participant_code, displayed_sequence)
+```
+
+## Individual Level Data
+
+```{r}
+individuals <- tweets[, -(2:8)] %>% unique()
+```
+
+## Write Data
+
+```{r}
+fwrite(x = tweets,
+       file = '../data/processed/tweet_level_data.csv')
+fwrite(x = individuals,
+       file = '../data/processed/tweet_level_data.csv')
+```
+
+## Clean up
+
+Lastly, we clean the global environment.
+
+```{r cleanup}
+objects <- c(ls(), "objects", "objects_to_keep", "objects_to_remove")
+objects_to_keep <- c("raw", "tweets", "individuals")
+objects_to_remove <- setdiff(objects, objects_to_keep)
+rm(list = objects_to_remove)
+```
+
+# Exclusion
+
+We exclude participants who self-reported that they used a generative AI to answer our questions. In addition, we only focus on participants who completed the survey.
+
+```{r}
+individuals <- individuals[completed_survey == TRUE & genai == "No"]
+tweets <- tweets[participant_code %in% individuals[, participant_code %>% unique()]]
+```
+
+```{r}
+#| echo: false
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+# Balance
+
+```{r}
+individuals[,
+            .(N = .N,
+              Age = mean(age, na.rm = TRUE),
+              Female = mean(female, na.rm = TRUE)),
+            by = fraction_unfavorable] %>% 
+  kable()
+
+```
+
+
+# Analyses
+
+```{r}
+#| tbl-cap: Summary Statistics for Trust Measure by Feed Composition
+
+mean_trust <- individuals[, .(mean_trust = mean(trust, na.rm = TRUE),
+                sd_trust = sd(trust, na.rm = TRUE),
+                count = .N), 
+            by = fraction_unfavorable] %>%
+  setorder(fraction_unfavorable)
+mean_trust %>% kable()
+```
+
+
+```{r layout}
+layout <- theme(panel.background = element_rect(fill = "white"),
+                legend.key = element_rect(fill = "white"),
+                panel.grid.major.y = element_line(colour = "grey", 
+                                                  linewidth = 0.25),
+                axis.ticks.y = element_blank(),
+                panel.grid.major.x = element_blank(),
+                axis.line.x.bottom = element_line(colour = "#000000", 
+                                                  linewidth = 0.5),
+                axis.line.y.left = element_blank(),
+                plot.title = element_text(size = rel(1))
+)
+```
+
+```{r}
+#| warning: false
+#| fig-cap: Level of Trust by Feed Composition
+
+# New facet label names 
+facet_labs <- individuals[order(fraction_unfavorable), 
+                          unique(fraction_unfavorable)] %>% 
+  paste0("%")
+names(facet_labs) <- individuals[order(fraction_unfavorable), 
+                                 unique(fraction_unfavorable)]
+
+
+# Plot assembly
+ggplot(data = individuals[!is.na(trust)],
+         mapping = aes(x = 1,
+                       y = trust)) +
+    geom_jitter(alpha = 0.66) +
+    facet_grid(~fraction_unfavorable,
+               labeller = labeller(fraction_unfavorable = as_labeller(facet_labs)),
+               switch = "x") +
+    geom_hline(data = mean_trust,
+               mapping = aes(yintercept=mean_trust),
+               alpha = 0.75) +
+    scale_y_continuous(limits = c(1, 7.5),
+                       expand = c(1, NA),
+                       breaks = 1:7) +
+    layout +
+    theme(axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          strip.background = element_rect(fill = "#FFFFFF"),
+          strip.placement = "outside") +
+  labs(x = "Fraction of Unfavorable Content",
+       y = "Mean Trust",
+       caption = "Horizontal lines represent means.")
+
+rm(facet_labs)
+```
+
+```{r}
+ols_1 <- lm(data = individuals,
+            formula = trust ~ fraction_unfavorable)
+ols_2 <- lm(data = individuals,
+            formula = trust ~ fraction_unfavorable + vegetarian + kfc_food)
+ols_3 <- lm(data = individuals,
+            formula = trust ~ fraction_unfavorable + vegetarian + fraction_unfavorable*vegetarian + kfc_food + fraction_unfavorable*kfc_food)
+
+ols_4 <- lm(data = individuals,
+            formula = kfc_brand ~ fraction_unfavorable)
+ols_5 <- lm(data = individuals,
+            formula = kfc_brand ~ fraction_unfavorable + vegetarian + kfc_food)
+ols_6 <- lm(data = individuals,
+            formula = kfc_brand ~ fraction_unfavorable + vegetarian + fraction_unfavorable*vegetarian + kfc_food + fraction_unfavorable*kfc_food)
+```
+
+```{r}
+#| tbl-cap: Regression Table
+#| results: asis
+stargazer(ols_1, ols_2, ols_3, ols_4, ols_5, ols_6,
+          type = "html")
+
+# clean up
+rm(list = ls() %>% str_subset(pattern = "ols_"))
+```
+
+
+# Visualizations
+
+```{r}
+#| eval: false
+ggplot(data = tweets[!is.na(seconds_in_viewport) & participant_code == "tp5y78og"],
+         mapping = aes(x = displayed_sequence,
+                       y = seconds_in_viewport)) +
+  geom_smooth(method = "loess", 
+                se = FALSE,
+                color = "#e9e9e9") +
+    geom_point(aes(color = favorable)) +
+    scale_y_continuous(limits = c(0, NA),
+                       expand = c(0, NA)) +
+    layout
+
+```
+
+```{r}
+#| warning: false
+ggplot(data = tweets[!is.na(seconds_in_viewport)],
+         mapping = aes(x = displayed_sequence,
+                       y = seconds_in_viewport)) +
+    geom_smooth(formula = 'y ~ x',
+                method = "loess", 
+                se = FALSE,
+                color = "#c3c3ce") +
+    geom_hline(yintercept = 0, size = 1.25) +
+    geom_point(aes(color = favorable), alpha = 0.5) +
+    scale_y_continuous(limits = c(0, NA),
+                       expand = c(0, NA)) +
+    facet_wrap(~participant_code) +
+    layout +
+    theme(axis.text.x = element_blank(),
+          strip.text.x = element_blank(),
+          axis.line.x.bottom = element_blank(),
+          axis.ticks.x = element_blank()) +
+    labs(x = "Sequence of Tweets",
+         y = "Dwell Time")
+
+```
+
+
+```{r}
+#| warning: false
+ggplot(data = tweets[!is.na(seconds_in_viewport)],
+       mapping = aes(x = displayed_sequence,
+                     y = seconds_in_viewport,
+                     group = participant_code)) +
+  geom_jitter(aes(color = favorable), 
+              alpha = 0.25) +
+  stat_smooth(geom="line", alpha=0.1, size = 1.25,
+              method = "loess", formula = "y ~ x") +
+  scale_y_continuous(limits = c(0, NA),
+                     expand = c(0, NA)) +
+  layout +
+  labs(x = "Sequence of Tweets",
+       y = "Dwell Time")
+
+```
+
+
+```{r}
+#| eval: false
+#| warning: false
+ggplot(data = tweets[!is.na(seconds_in_viewport)],
+         mapping = aes(x = displayed_sequence,
+                       y = seconds_in_viewport,
+                       color = favorable,
+                       fill = favorable,
+                       group = favorable)) +
+    geom_jitter(alpha = 0.66) +
+    geom_smooth(method = 'lm',
+                alpha = 0.33) +
+    scale_y_continuous(limits = c(0, 30),
+                       expand = c(0, NA)) +
+    facet_grid(~favorable) +
+    layout +
+    theme(strip.text.x = element_blank()) +
+    labs(x = "Sequence of Tweets",
+         y = "Dwell Time")
+```
+
+```{r}
+#| warning: false
+#| include: false
+p1 <- ggplot(data = tweets[!is.na(seconds_in_viewport) & favorable == TRUE],
+         mapping = aes(x = displayed_sequence,
+                       y = seconds_in_viewport,
+                       group = favorable)) +
+    geom_jitter(alpha = 0.66, color = "#00BFC4") +
+    geom_smooth(method = 'lm',
+                alpha = 0.33,
+                formula = 'y ~ x',
+                se = FALSE,
+                color = "#00BFC4",
+                fill = "#00BFC4") +
+    scale_y_continuous(limits = c(0, 30),
+                       expand = c(0, NA)) +
+    layout +
+    labs(x = "Favorable Content",
+         y = "Dwell Time") +
+  theme(legend.position = "none")
+
+p2 <- ggplot(data = tweets[!is.na(seconds_in_viewport) & favorable == FALSE],
+         mapping = aes(x = displayed_sequence,
+                       y = seconds_in_viewport,
+                       group = favorable)) +
+    geom_jitter(alpha = 0.66, color = "#F8766D") +
+    geom_smooth(method = 'lm',
+                alpha = 0.33,
+                formula = 'y ~ x',
+                se = FALSE,
+                color = "#F8766D",
+                fill = "#F8766D") +
+    scale_y_continuous(limits = c(0, 30),
+                       expand = c(0, NA)) +
+    layout +
+    labs(x = "Unfavorable Content",
+         y = "Dwell Time") +
+  theme(legend.position = "none",
+        axis.title.y = element_blank(),
+        axis.text.y = element_blank())
+
+p <- (p1 + p2)
+
+p <- wrap_elements(panel = p) +
+  labs(tag = "Sequence of Tweets") +
+  theme(plot.tag = element_text(size = rel(1)),
+        plot.tag.position = "bottom")
+```
+
+```{r}
+p
+
+rm(list = c("p", "p1", "p2"))
+```
+
+

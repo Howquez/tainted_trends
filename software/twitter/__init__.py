@@ -1,10 +1,11 @@
 from otree.api import *
 import pandas as pd
 import numpy as np
-import itertools
 import re
 import os
 import random
+from itertools import cycle
+
 
 
 
@@ -27,7 +28,7 @@ class C(BaseConstants):
     TOPICS_TEMPLATE = "twitter/T_Trending_Topics.html"
     BANNER_TEMPLATE = "twitter/T_Banner_Ads.html"
 
-    N_TWEETS = 40
+    N_TWEETS = 46
     FEED_LENGTH = list(range(*{'start':0,'stop':N_TWEETS+1,'step':1}.values()))
     TWEET_LENGTH = list(range(*{'start':0,'stop':N_TWEETS+1,'step':1}.values()))
 
@@ -45,7 +46,6 @@ class Player(BasePlayer):
     feed_condition = models.StringField(doc='indicates the feed condition a player is randomly assigned to')
     favorable_feed = models.StringField(doc='indicates order of favorbale (1) and unfavorbale (0) tweets')
     sequence = models.StringField(doc='prints the sequence of tweets based on doc_id')
-    unfavorable_count = models.IntegerField(doc='indicates number of unfavorbale tweets in feed')
 
     cta = models.BooleanField(doc='indicates whether CTA was clicked or not')
     scroll_sequence = models.LongStringField(doc='tracks the sequence of feed items a participant scrolled through.')
@@ -111,15 +111,13 @@ def creating_session(subsession):
         tweets['row'] = range(1, len(tweets) + 1)
 
         # participant vars
-        tweets = create_random_draw(tweets)  # Tainted Trends Specific
+        tweets = create_random_draw(tweets, sample_size=20)  # Tainted Trends Specific
         player.participant.tweets = tweets
 
         # Tainted Trends Specific
         player.sequence = ', '.join(map(str, tweets['doc_id'].tolist()))
         favorable_list = tweets['favorable'].tolist()
         player.favorable_feed = ', '.join(map(str, favorable_list))
-        num_total = len(favorable_list)
-        player.unfavorable_count = num_total - sum(favorable_list)
 
 
 
@@ -209,21 +207,30 @@ def create_redirect(player):
     return link
 
 # Tainted Trends Specifics
-def create_random_draw(df, sample_size=20):
-    percent_options = [0, 20, 40, 60, 80, 100]  # Specify the percentages directly
-    percent_unfavorable = random.choice(percent_options)  # Randomly select the percentage of 'unfavorable' rows
-    n_unfavorable = int(sample_size * percent_unfavorable / 100)  # Calculate the number of 'unfavorable' rows based on the selected percentage
-    n_favorable = sample_size - n_unfavorable  # Calculate the number of 'favorable' rows
+def create_random_draw(df, sample_size=20, target_column='favorable', random_seed=None):
+    if len(df) < sample_size:
+        raise ValueError("Sample size is larger than DataFrame size.")
 
-    unfavorable_indices = random.sample(df[df['favorable'] == False].index.tolist(), min(n_unfavorable, len(df[df['favorable'] == False])))
-    favorable_indices = random.sample(df[df['favorable'] == True].index.tolist(), min(n_favorable, len(df[df['favorable'] == True])))
+    percent_options = [0, 20, 40, 60, 80, 100]
+    weights = [1] * len(percent_options)  # Equal weights for each option
+    random.seed(random_seed)
 
-    all_indices = unfavorable_indices + favorable_indices
-    random.shuffle(all_indices)  # Shuffle the combined indices
+    unfavorable_percent = random.choices(percent_options, weights=weights, k=1)[0]
+    unfavorable_count = round(unfavorable_percent / 100 * sample_size)
+    favorable_count = sample_size - unfavorable_count
 
-    random_draw = df.loc[all_indices].reset_index(drop=True)  # Reset the index accordingly
+    df = df.sample(frac=1, random_state=random_seed).reset_index(drop=True)
 
+    unfavorable_indices = df.loc[df[target_column] == False].index[:unfavorable_count]
+    favorable_indices = df.loc[df[target_column] == True].index[:favorable_count]
+
+    all_indices = list(unfavorable_indices) + list(favorable_indices)
+    random.shuffle(all_indices)
+
+    random_draw = df.loc[all_indices].reset_index(drop=True)
     return random_draw
+
+
 
 
 
@@ -268,17 +275,15 @@ class C_Feed(Page):
 
     @staticmethod
     def live_method(player, data):
-        print(data)
         parts = data.split('=')
-        variable_name = parts[0].strip()
-        value = eval(parts[1].strip())
-        print(value)
+        if len(parts) != 2:
+            print("Invalid data format")
+        else:
+            variable_name = parts[0].strip()
+            value = parts[1].strip()
 
-        # Use getattr to get the current value of the attribute within the player object
-        current_value = getattr(player, variable_name, 0)
-
-        # Perform the addition assignment and update the attribute within the player object
-        setattr(player, variable_name, current_value + value)
+        # Perform the assignment and update the attribute within the player object
+        setattr(player, variable_name, value)
 
 class D_Redirect(Page):
 
@@ -292,5 +297,4 @@ class D_Redirect(Page):
 
 page_sequence = [A_Intro,
                  B_Briefing,
-                 C_Feed,
-                 D_Redirect]
+                 C_Feed]

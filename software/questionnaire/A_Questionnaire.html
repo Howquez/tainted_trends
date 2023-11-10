@@ -1,0 +1,45 @@
+{{ block scripts }}
+{{ endblock }}
+
+{{ block global_styles  }}
+<link rel="stylesheet" href="{% static 'css/styles.css' %}">
+{{ endblock }}
+
+
+{{ block content }}
+<body class="bg-light.bg-gradient">
+
+    <div class="container">
+        <div class="row justify-content-center mt-5">
+            <div class="col-sm-10 col-md-10 col-lg-8">
+                <!-- Decision Card -->
+                <div class="card rounded mt-3 shadow-lg">
+                    <div class="card-body p-5">
+                        <h4 class="mb-0">
+                            Consider the brand KFC and feed you have just seen.
+                        </h4>
+                        <small class="text-secondary">
+                            Please answer the following question as detailed as you can by writing a few sentences describing your thoughts.
+                        </small>
+
+                        <br><br>
+
+                        <p class="mt-3 mb-0">
+                            <small>
+                                What were the first thoughts and feelings towards the <em>brand KFC</em> that came to
+                                your mind when you were scrolling through the feed?
+                            </small>
+                        </p>
+                        {{ form.perception }}
+
+                        <div class="d-flex justify-content-center mt-5 mb-3">
+                            <button class="btn btn-success shadow" type="submit" id="submitButton">
+                                Next
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{{ endblock }}

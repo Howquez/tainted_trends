@@ -15,17 +15,18 @@ replyButtons.forEach(function(replyButton) {
     });
 });
 
-//replyModalButton.addEventListener("click", function() {
 
 function replyOneUp(){
     var replyButton = document.getElementById("reply_button_" + ID);
-    var replyCount = document.getElementById("reply_count_" + ID);
-    var replyIcon  = document.getElementById("reply_icon_" + ID);
+    var replyCount  = document.getElementById("reply_count_" + ID);
+    var replyIcon   = document.getElementById("reply_icon_" + ID);
+    var textArea    = document.getElementById("reply_to_item_" + ID)
 
     if (!replyButton.classList.contains("replied")){
         replyButton.classList.add("replied");
         replyCount.textContent = (parseInt(replyCount.textContent) + 1).toString();
         replyIcon.className="bi bi-chat-fill text-primary reply-icon";
+        liveSend("reply_to_item_" + ID + "=" + textArea.value)
     };
 };
 

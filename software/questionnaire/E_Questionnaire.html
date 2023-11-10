@@ -1,0 +1,78 @@
+{{ block scripts }}
+{{ endblock }}
+
+{{ block global_styles  }}
+<link rel="stylesheet" href="{% static 'css/styles.css' %}">
+{{ endblock }}
+
+
+{{ block content }}
+<body class="bg-light.bg-gradient">
+
+    <div class="container">
+        <div class="row justify-content-center mt-5">
+            <div class="col-sm-10 col-md-10 col-lg-8">
+                <!-- Decision Card -->
+                <div class="card rounded mt-3 shadow-lg">
+                    <div class="card-body p-5">
+                        <h4 class="mb-0">
+                            Consider the feed from a usability perspective rate how well the following statements describe your perception.
+                        </h4>
+
+                        <br><br>
+
+                        <p class="">
+                            The feed felt ...
+                        </p>
+
+                        <table class="table border-top">
+                            <tr></tr>
+                            <tr>
+                                <td class="text-end"><small>Confusing</small></td>
+                                {{ for choice in form.usability_1 }}
+                                    <td>
+                                        <small>{{ choice }}</small>
+                                    </td>
+                                {{ endfor }}
+                                <td><small>Easy</small></td>
+                            </tr>
+                            <tr>
+                                <td class="text-end"><small>Boring</small></td>
+                                {{ for choice in form.usability_2 }}
+                                    <td>
+                                        <small>{{ choice }}</small>
+                                    </td>
+                                {{ endfor }}
+                                <td><small>Engaging</small></td>
+                            </tr>
+                            <tr>
+                                <td class="text-end"><small>Unnatural</small></td>
+                                {{ for choice in form.usability_3 }}
+                                    <td>
+                                        <small>{{ choice }}</small>
+                                    </td>
+                                {{ endfor }}
+                                <td><small>Realistic</small></td>
+                            </tr>
+                        </table>
+
+                        <br><br>
+
+                        <p class="mt-3 mb-0">
+                            <small>
+                                Did you encounter any problems while browsing the feed? Do you have any comments?
+                            </small>
+                        </p>
+                        {{ form.usability_otf }}
+
+                        <div class="d-flex justify-content-center mt-5 mb-3">
+                            <button class="btn btn-success shadow" type="submit" id="submitButton">
+                                Next
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{{ endblock }}
