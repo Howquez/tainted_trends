@@ -40,21 +40,46 @@ bibliography: ../literature/biblio.bib
 
 ---
 
-This document briefly describes the motivation, the design, the processing of the eventual data as well as the analyses of an experiment we plan to run.
-
 # Motivation
 
 In today's hyperconnected world, brands are co-created by a variety of stakeholders [@SwaminathanEtAl_2020]. We study exogenously inflicted brand dilution caused by stakeholders who _hijack_ brand experiences in social media [@GrierEtAl_2010]. Specifically, we investigate the contaminating effect [@WhitlerEtAl_2021] of stakeholders who append their (from a brand's perspective) unfavorable content to a branded hashtag.
 
+# Research Question
+
+Does the exposure to hijacked content in the context of branded hashtags dilute trust in the associated brand?
+
+# Hypotheses
+
+The more hijacked content a participant is exposed to, the lower her trust in the brand. (See @sec-primary-analyses for the exact operationalization.)
+
 
 # Design
 
-We expose participants to a realistic social media feed that covers the _National Fried Chicken Day_. We ask participants to scroll through the feed to learn more about that event and tell them that it is associated to the brand _Kentucky Fried Chicken (KFC)_. Importantly, we exogeneously manipulate the degree to which a feed is hijacked by randomly drawing a set of tweets that are favorable and unfavorable (from a brand's perspective). An unfavorable tweet may consist of animal rights, labor rights or pro-vegan content that is appended to the hashtag _#NationalFriedChickenDay_. Favorable content also uses that hashtag but appends content showing recipes, family gatherings or actual meals. 
+We will expose participants to a realistic social media feed that covers the _National Fried Chicken Day_. We will ask participants to scroll through the feed to learn more about that event and tell them that it is associated to the brand _Kentucky Fried Chicken (KFC)_. Importantly, we will exogeneously manipulate the degree to which a feed is hijacked by randomly^[We draw tweets randomly on a participant level without replacement. This not only implies a random composition of feeds but also a random order of tweets within that feed.] drawing a set of tweets that are favorable and unfavorable (from a brand's perspective). An unfavorable tweet may consist of animal rights, labor rights or pro-vegan content that is appended to the hashtag _#NationalFriedChickenDay_. Favorable content also uses that hashtag but appends content showing recipes, family gatherings or actual meals. You can find the complete list of tweets we sample from [here on OSF](https://osf.io/a8dyv) or in the archived `*.otreezip` (more on that below).
 
-Subsequently, we ask participants to describe their experience, thoughts and feelings towards the focal brand (KFC) in an open text field^["_Please describe as detailed as you can: What were the first thoughts and feelings towards the brand KFC that came to your mind when you were scrolling through the feed?_"] and elicit an established brand trust measure using four seven-point semantic-differentials to measure how much a participant believes the brand is honest and not manipulative [@KirmaniEtAl2017]^[dishonest / honest, insincere / sincere, manipulative / not manipulative, not trustworthy / trustworthy.]. We also ask participants whether they like KFC on a single seven-point Likert scale. Furthermore, we elicit covariates covering the participants' fast food and meat consumption as well as their age, gender and education.
+Subsequently, we will ask participants to describe their experience, thoughts and feelings towards the focal brand (KFC) in an open text field^["_Please describe as detailed as you can: What were the first thoughts and feelings towards the brand KFC that came to your mind when you were scrolling through the feed?_"] and elicit an established brand trust measure using four seven-point semantic-differentials to measure how much a participant believes the brand is honest and not manipulative [@KirmaniEtAl2017]^[dishonest / honest, insincere / sincere, manipulative / not manipulative, not trustworthy / trustworthy.]. We will also ask participants whether they like KFC on a single seven-point Likert scale. Furthermore, we will elicit covariates covering the participants' fast food and meat consumption as well as their age, gender and education.
 
+You can find the exact materials on OSF. This study's software is archived in oTree's [@oTree] native zip format [here](https://osf.io/7389e).
 
-# Install Packages
+# Implementation
+
+We designed an oTree experiment that mimics social media feeds. In this study, we will mimic a twitter feed where participants can scroll through and interact with the feed as well as individual tweets. You can find more information about the software [here](https://osf.io/jcxvk/).
+
+# Population and Sample Size
+
+We will recruit participants from [Prolific](https://www.prolific.com/) who meet the following criteria:
+
+- Approval Rate >= 99%
+- First Language == ‘English’
+- Location == (‘USA’ | ‘Canada’)
+
+Because the software is computationally expensive, we recruit 300 participants (and not more) to ensure a smooth experience for the participants.
+
+# Preprocessing
+
+This section describes how we preprocess the data (using R and quarto) in detail. You can skip this section and jump to the exclusion criteria in @sec-exclusion or the analysis @sec-primary-analyses.
+
+## Install Packages
 
 We install the following packages using the `groundhog` package manager to increase computational reproducibility.
 
@@ -69,7 +94,8 @@ if (!requireNamespace("groundhog", quietly = TRUE)) {
 
 pkgs <- c("magrittr", "data.table", "knitr", "stringr", "jsonlite", 
           "ggplot2", "patchwork",
-          "stargazer")
+          "stargazer",
+          "tidytext", "textdata")
 
 groundhog::groundhog.library(pkg = pkgs,
                              date = "2023-09-25")
@@ -77,9 +103,9 @@ groundhog::groundhog.library(pkg = pkgs,
 rm(pkgs)
 ```
 
-# Preprocessing
-
 ## Read Data
+
+For this preregistration, we read some data we generated while testing the software. The eventual analysis will read a different data set that we will store in `../data/raw/` once we have collected the data.
 
 ```{r read_data}
 raw <- data.table::fread(file = "../data/testing/all_apps_wide-2023-11-09.csv")
@@ -331,7 +357,7 @@ objects_to_remove <- setdiff(objects, objects_to_keep)
 rm(list = objects_to_remove)
 ```
 
-# Exclusion
+# Exclusion {#sec-exclusion}
 
 We exclude participants who self-reported that they used a generative AI to answer our questions. In addition, we only focus on participants who completed the survey.
 
@@ -345,7 +371,7 @@ tweets <- tweets[participant_code %in% individuals[, participant_code %>% unique
 knitr::opts_chunk$set(echo = FALSE)
 ```
 
-
+<!--
 # Balance
 
 ```{r}
@@ -357,9 +383,13 @@ individuals[,
   kable()
 
 ```
+-->
 
+# Primary Analyses {#sec-primary-analyses}
 
-# Analyses
+## Trust
+
+In this study, we focus primarily on trust. We analyze the data in three steps: First, we summarize the data descriptively.
 
 ```{r}
 #| tbl-cap: Summary Statistics for Trust Measure by Feed Composition
@@ -387,6 +417,9 @@ layout <- theme(panel.background = element_rect(fill = "white"),
 )
 ```
 
+
+Second, we visualize the data.
+ 
 ```{r}
 #| warning: false
 #| fig-cap: Level of Trust by Feed Composition
@@ -425,6 +458,11 @@ ggplot(data = individuals[!is.na(trust)],
 rm(facet_labs)
 ```
 
+
+Third, we run OLS regressions in three models. The first model tests the main effect, the second controls for the participant's diet and whether she enjoys KFC's food. The third model adds interaction terms as the effect of hijacked content may differ between vegetarians and non-vegetarians, for instance.
+
+We will also add another model that is not displayed here, where we control for the remaining covariates.
+
 ```{r}
 ols_1 <- lm(data = individuals,
             formula = trust ~ fraction_unfavorable)
@@ -442,7 +480,7 @@ ols_6 <- lm(data = individuals,
 ```
 
 ```{r}
-#| tbl-cap: Regression Table
+#| tbl-cap: Regression Table - Level of Trust and Brand Liking by Feed Composition
 #| results: asis
 stargazer(ols_1, ols_2, ols_3, ols_4, ols_5, ols_6,
           type = "html")
@@ -451,8 +489,121 @@ stargazer(ols_1, ols_2, ols_3, ols_4, ols_5, ols_6,
 rm(list = ls() %>% str_subset(pattern = "ols_"))
 ```
 
+Model 4, 5, and 6 are very similar to the first three models but contain a different dependent variable: `kfc_brand` --- the degree to which a participant likes the brand KFC.
 
-# Visualizations
+
+## Sentiment Analyses
+
+Our test data does not contain any real text data, which is why we cannot operationalize the exact analysis we will run. Hence, the following code provides the most basic basic sentiment analysis we can imagine. It is based on unigrams, the `AFINN` general-purpose lexicon [@Nielsen_2011] and without stemming.
+
+```{r}
+#| echo: true
+
+tidy_text <- unnest_tokens(tbl = individuals,
+                           output = word,
+                           input  = perception,
+                           token = 'words')
+```
+
+```{r stopwords}
+#| echo: true
+
+data(stop_words)
+stop_words <- stop_words %>% data.table()
+custom_stop_words <- c('tweet', 'tweets', 'post', 'posts', 'feed', 'KFC')
+stop_words <- rbind(stop_words,
+                    data.table(word = custom_stop_words,
+                               lexicon = 'custom'))
+```
+
+
+```{r}
+#| echo: true
+
+tidy_text <- tidy_text[!stop_words, on = .(word)]
+```
+
+
+```{r}
+#| echo: true
+
+sentiments <- get_sentiments("afinn") %>% as.data.table()
+afinn <- tidy_text[sentiments, on = .(word)]
+
+sent <- afinn[,
+              .(sentiment = sum(value)),
+              by = c('participant_code', 'fraction_unfavorable')]
+
+# merge
+sentiment <- individuals[sent, on = .(participant_code)][!is.na(participant_code)]
+
+# clean up
+rm(list = c("sent", "sentiments", "tidy_text", "stop_words"))
+```
+
+We envision the same visualization and regression as in the previous sub-section:
+
+```{r}
+#| warning: false
+#| fig-cap: Sentiment by Feed Composition
+
+# New facet label names 
+facet_labs <- sentiment[order(fraction_unfavorable), 
+                          unique(fraction_unfavorable)] %>% 
+  paste0("%")
+names(facet_labs) <- sentiment[order(fraction_unfavorable), 
+                                 unique(fraction_unfavorable)]
+
+
+# Plot assembly
+ggplot(data = sentiment[!is.na(sentiment)],
+         mapping = aes(x = 1,
+                       y = sentiment)) +
+    geom_jitter(alpha = 0.66) +
+    facet_grid(~fraction_unfavorable,
+               labeller = labeller(fraction_unfavorable = as_labeller(facet_labs)),
+               switch = "x") +
+    geom_hline(data = mean_trust,
+               mapping = aes(yintercept=mean_trust),
+               alpha = 0.75) +
+    layout +
+    theme(axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          strip.background = element_rect(fill = "#FFFFFF"),
+          strip.placement = "outside") +
+  labs(x = "Fraction of Unfavorable Content",
+       y = "Sentiment",
+       caption = "Horizontal lines represent means.")
+
+rm(facet_labs)
+```
+
+```{r}
+#| tbl-cap: Regression Table - Sentiment by Feed Composition
+#| results: asis
+#| warning: false
+
+ols_1 <- lm(data = sentiment,
+            formula = sentiment ~ fraction_unfavorable)
+ols_2 <- lm(data = sentiment,
+            formula = sentiment ~ fraction_unfavorable + vegetarian + kfc_food)
+ols_3 <- lm(data = sentiment,
+            formula = sentiment ~ fraction_unfavorable + vegetarian + fraction_unfavorable*vegetarian + kfc_food + fraction_unfavorable*kfc_food)
+
+
+stargazer(ols_1, ols_2, ols_3,
+          type = "html")
+
+# clean up
+rm(list = ls() %>% str_subset(pattern = "ols_"))
+```
+
+In addition to that, we plan to use the same data for topic modeling.
+
+<!--
+# Exploratory Analyses {#sec-exploration}
+
+We also want to explore the dwell time as well as the self-reported usability measures.  The following visualizations represent some  future directions.
 
 ```{r}
 #| eval: false
@@ -589,4 +740,4 @@ p
 rm(list = c("p", "p1", "p2"))
 ```
 
-
+-->
