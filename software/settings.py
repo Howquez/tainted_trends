@@ -15,7 +15,7 @@ SESSION_CONFIGS = [
 
 SESSION_CONFIG_DEFAULTS = dict(
     real_world_currency_per_point=1.00,
-    participation_fee=2.10,
+    participation_fee=1.40,
     survey_link = 'https://your-link-here.com',
     url_param = 'PROLIFIC_PID',
     briefing = '<h5>This could be your briefing</h5><p>Use HTML syntax to format your content to your liking.</p>',
